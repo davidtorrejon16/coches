@@ -1,0 +1,98 @@
+<body 
+  style="margin:0;background:#111;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;color:#eee;font-family:sans-serif;overflow:hidden"
+  onload="
+    c=document.getElementById('g');x=c.getContext('2d');
+    lvl=1;maxLvl=1;menu=1;ex=[];
+    p={x:140,y:340,w:30,h:30,b:[],pw:0,t:0};e=[];eb=[];pw=[];f=0;boss=null;k={};
+    window.onkeydown=e=>k[e.key]=1;window.onkeyup=e=>k[e.key]=0;
+    
+    go=(l)=>{lvl=l;s=0;v=5;e=[];eb=[];pw=[];p.b=[];p.x=140;p.y=340;boss=null;menu=0;f=0;ex=[]};
+    boom=(px,py,c)=>{for(i=0;i<8;i++)ex.push({x:px,y:py,vx:Math.random()*4-2,vy:Math.random()*4-2,l:15,c:c})};
+
+    setInterval(()=>{
+      if(menu){
+        x.fillStyle='#222';x.fillRect(0,0,300,400);
+        x.fillStyle='#fff';x.font='16px Arial';x.fillText('SELECCIONA MISIÓN',70,80);
+        for(i=0;i<10;i++){
+          row=Math.floor(i/5);col=i%5;
+          unlocked = i+1 <= maxLvl;
+          x.fillStyle=unlocked?'#4a4':'#333';
+          x.fillRect(col*55+15, row*60+120, 45, 45);
+          x.fillStyle='#fff';x.fillText(i+1, col*55+30, row*60+148);
+        }
+        return;
+      }
+
+      x.fillStyle='#123';x.fillRect(0,0,300,400);
+      for(i=0;i<6;i++){x.fillStyle='#135';x.fillRect((i*60),(f*2+i*70)%400,2,20)}
+      
+      if(k.ArrowLeft&&p.x>0)p.x-=5;if(k.ArrowRight&&p.x<270)p.x+=5;
+      if(k.ArrowUp&&p.y>0)p.y-=5;if(k.ArrowDown&&p.y<370)p.y+=5;
+      if(k[' ']&&f%8==0){p.b.push({x:p.x+13,y:p.y});if(p.pw==1){p.b.push({x:p.x,y:p.y});p.b.push({x:p.x+26,y:p.y})}}
+      if(p.t>0)p.t--;else p.pw=0;
+
+      ex.forEach((o,i)=>{
+        o.x+=o.vx;o.y+=o.vy;o.l--;
+        x.fillStyle=o.c;x.fillRect(o.x,o.y,3,3);
+        if(o.l<=0)ex.splice(i,1);
+      });
+
+      x.fillStyle='#454';x.fillRect(p.x+12,p.y,6,30);
+      x.fillStyle='#676';x.fillRect(p.x,p.y+12,30,8);
+      
+      p.b.forEach((b,i)=>{b.y-=12;x.fillStyle='#ff0';x.fillRect(b.x,b.y,4,10);if(b.y<0)p.b.splice(i,1)});
+
+      targetScore = 300 + (lvl*150);
+      if(s>=targetScore && !boss) boss={x:90,y:-80,d:1,hp:40+(lvl*20),max:40+(lvl*20),w:120,h:50};
+
+      if(boss){
+        boss.y<30?boss.y+=1:boss.x+=boss.d*(1+lvl*0.2);
+        if(boss.x>180||boss.x<0)boss.d*=-1;
+        x.fillStyle='#333';x.fillRect(boss.x,boss.y,boss.w,boss.h);
+        x.fillStyle='#f00';x.fillRect(50,385,(boss.hp/boss.max)*200,8);
+        if(f%20==0)eb.push({x:boss.x+Math.random()*boss.w,y:boss.y+boss.h});
+        p.b.forEach((b,bi)=>{if(b.x>boss.x&&b.x<boss.x+boss.w&&b.y>boss.y&&b.y<boss.y+boss.h){
+          boss.hp--;boom(b.x,b.y,'#ff0');p.b.splice(bi,1);s+=10;
+          if(boss.hp<=0){
+            for(j=0;j<20;j++)boom(boss.x+60,boss.y+25,'#f80');
+            maxLvl=Math.max(maxLvl,lvl+1);menu=1;
+          }
+        }});
+      } else if(Math.random()<0.02) e.push({x:Math.random()*270,y:-30});
+
+      e.forEach((n,i)=>{
+        n.y+=(2+lvl*0.2);
+        x.fillStyle='#222';x.fillRect(n.x+12,n.y,6,25);
+        x.fillStyle='#444';x.fillRect(n.x,n.y+5,30,6);
+        p.b.forEach((b,bi)=>{if(b.x>n.x&&b.x<n.x+30&&b.y>n.y&&b.y<n.y+25){
+          boom(n.x+15,n.y+15,'#f40');
+          e.splice(i,1);p.b.splice(bi,1);s+=25;
+        }});
+        if(Math.abs(p.x-n.x)<25&&Math.abs(p.y-n.y)<25){if(p.pw!=2)v--;boom(p.x+15,p.y+15,'#f00');e.splice(i,1);if(v<=0)menu=1;}
+        if(n.y>400)e.splice(i,1);
+      });
+
+      eb.forEach((m,i)=>{
+        m.y+=5;x.fillStyle='#f80';x.fillRect(m.x,m.y,6,6);
+        if(Math.abs(p.x+15-m.x)<20&&Math.abs(p.y+15-m.y)<20){if(p.pw!=2)v--;boom(p.x+15,p.y+15,'#f00');eb.splice(i,1);if(v<=0)menu=1;}
+        if(m.y>400)eb.splice(i,1);
+      });
+
+      x.fillStyle='#fff';x.font='10px sans-serif';
+      x.fillText('LVL:'+lvl+' SCORE:'+s+'/'+targetScore+' VIDAS:'+v,10,20);
+      f++;
+    },20)"
+>
+  <div style="text-align:center">
+    <h2 style="margin:5px;color:#f00;text-shadow:2px 2px #000">WWII: 10 MISSIONS</h2>
+    <div style="position:relative; width:300px; height:400px">
+      <canvas id="g" width="300" height="400" style="border:5px solid #444;background:#222"></canvas>
+      <div style="position:absolute;top:120px;left:15px;width:275px;height:120px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+        <script>
+          for(let i=1;i<=10;i++) document.write(`<div style="height:45px;cursor:pointer" onclick="if(${i}<=maxLvl)go(${i})"></div>`);
+        </script>
+      </div>
+    </div>
+    <p style="font-size:12px;color:#888">FLECHAS PARA MOVER • ESPACIO PARA DISPARAR</p>
+  </div>
+</body>
