@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Racing: 16-BIT RETRO</title>
+    <style>
+        /* Estilo 16-bit: Sombras duras y bordes definidos */
+        :root { 
+            --accent: #ff0044; 
+            --bg: #1a1a2e; 
+            --card: #252545; 
+            --retro-border: 4px solid #000;
+            --retro-shadow: 4px 4px 0px #000;
+        }
+        
+        body { 
+            margin: 0; 
+            background: var(--bg); 
+            color: #fff; 
+            font-family: 'Courier New', Courier, monospace; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            overflow: hidden; 
+            image-rendering: pixelated; /* Crucial para el look retro */
+        }
+
+        #game-container { 
+            position: relative; 
+            border: 8px solid #333; 
+            outline: 4px solid #000;
+            overflow: hidden; 
+            box-shadow: 20px 20px 0px rgba(0,0,0,0.4);
+        }
+
+        canvas { background: #222; display: block; image-rendering: pixelated; }
+
+        .hud { 
+            position: absolute; top: 0; left: 0; width: 100%; padding: 15px; box-sizing: border-box;
+            display: flex; justify-content: space-between; pointer-events: none; z-index: 10;
+            background: rgba(0,0,0,0.7); border-bottom: 4px solid #000;
+        }
+
+        .stat-group { display: flex; flex-direction: column; }
+        .label { font-size: 0.8em; color: #00ffcc; text-transform: uppercase; text-shadow: 2px 2px #000; }
+        .value { font-size: 1.4em; font-weight: bold; color: #fff; text-shadow: 2px 2px #000; }
+
+        .menu { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: #1a1a2e; display: flex; flex-direction: column; 
+            padding: 40px; box-sizing: border-box; z-index: 20;
+            border: 10px double #444;
+        }
+
+        h1 { 
+            font-size: 2.5em; margin: 0 0 20px 0; color: #ff0044; 
+            text-shadow: 4px 4px 0px #000; text-align: center;
+            border-bottom: 4px solid #ff0044;
+        }
+
+        .showroom { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+        
+        .v-item { 
+            background: var(--card); border: var(--retro-border); 
+            padding: 10px; cursor: pointer; transition: transform 0.1s;
+        }
+        
+        .v-item:active { transform: scale(0.95); }
+        .v-item.selected { background: #4d1d3d; border-color: #ff0044; box-shadow: inset 4px 4px 0 #000; }
+
+        .btn-main { 
+            background: #2ecc71; color: #000; border: var(--retro-border); 
+            padding: 15px; font-size: 1.5em; font-weight: bold; cursor: pointer;
+            box-shadow: var(--retro-shadow);
+        }
+
+        .btn-main:hover { background: #27ae60; }
+
+        .shake { animation: shake 0.15s infinite; }
+        @keyframes shake { 0%{left:2px} 50%{left:-2px} 100%{left:0} }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="hud">
+        <div class="stat-group"><span class="label">HP</span><span class="value" id="ui-lives" style="color:#ff0044">100%</span></div>
+        <div class="stat-group" style="align-items: center;"><span class="label">STAGE</span><span class="value" id="ui-biome" style="color:#f1c40f">1</span></div>
+        <div class="stat-group" style="align-items: flex-end;"><span class="label">CASH</span><span class="value" style="color:#2ecc71">$<span id="ui-coins">0</span></span></div>
+    </div>
+
+    <div id="main-menu" class="menu">
+        <h1>16-BIT RACER</h1>
+        <div class="showroom" id="showroom"></div>
+        <button class="btn-main" onclick="startGame()">PRESS START</button>
+    </div>
+
+    <canvas id="gameCanvas" width="500" height="850"></canvas>
+</div>
+
+<script>
+// El JS se mantiene idéntico en lógica, solo se han retocado los dibujos en Canvas
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const VEHICLES = [
+    { id: 0, name: "COROLLA", type: "car", color: "#3498db", price: 0, w: 48, h: 90, speed: 1, hand: 6, owned: true },
+    { id: 1, name: "SUPRA", type: "car", color: "#e74c3c", price: 150, w: 50, h: 95, speed: 1.2, hand: 7, owned: false },
+    { id: 2, name: "NINJA", type: "moto", color: "#2ecc71", price: 300, w: 22, h: 58, speed: 1.5, hand: 10, owned: false },
+    { id: 3, name: "TITAN", type: "truck", color: "#9b59b6", price: 500, w: 68, h: 180, speed: 0.7, hand: 4, owned: false }
+];
+
+const BIOMES = [
+    { name: "CITY RUN", bg: "#2c3e50", road: "#34495e", line: "#7f8c8d" },
+    { name: "DUST HILL", bg: "#e67e22", road: "#d35400", line: "#f39c12" },
+    { name: "GREEN VAL", bg: "#27ae60", road: "#2d3436", line: "#2ecc71" },
+    { name: "MIDNIGHT", bg: "#000033", road: "#1a1a2e", line: "#4834d4" }
+];
+
+let coins = 0, lives = 3, isPlaying = false, distance = 0, roadY = 0, selectedId = 0;
+let player = { x: 225, y: 650, tilt: 0 };
+let entities = { traffic: [], items: [], health: [], decor: [], roadMarks: [] };
+const keys = {};
+
+function initShowroom() {
+    const container = document.getElementById('showroom');
+    container.innerHTML = "";
+    VEHICLES.forEach(v => {
+        const div = document.createElement('div');
+        div.className = `v-item ${v.id === selectedId ? 'selected' : ''}`;
+        div.onclick = () => { if(!v.owned && coins >= v.price){ coins -= v.price; v.owned = true; selectedId = v.id; } else if(v.owned){ selectedId = v.id; } updateUI(); initShowroom(); };
+        div.innerHTML = `<div class="label" style="color:#fff">${v.name}</div><div style="color:#f1c40f; font-weight:bold">${v.owned ? "OK" : "$"+v.price}</div>`;
+        container.appendChild(div);
+    });
+}
+
+function updateUI() {
+    document.getElementById('ui-coins').innerText = coins;
+    document.getElementById('ui-lives').innerText = Math.max(0, (lives * 33.3).toFixed(0)) + "%";
+    let bIndex = Math.floor((distance / 800) % BIOMES.length);
+    document.getElementById('ui-biome').innerText = BIOMES[bIndex].name;
+}
+
+function startGame() {
+    document.getElementById('main-menu').style.display = 'none';
+    isPlaying = true; lives = 3; distance = 0;
+    entities = { traffic: [], items: [], health: [], decor: [], roadMarks: [] };
+    updateUI();
+    loop();
+}
+
+function update() {
+    const v = VEHICLES[selectedId];
+    let speed = (12 + distance/2000) * v.speed;
+    roadY += speed;
+    distance++;
+
+    if(keys.ArrowLeft && player.x > 80) { player.x -= v.hand; player.tilt = -0.08; }
+    else if(keys.ArrowRight && player.x < 420 - v.w) { player.x += v.hand; player.tilt = 0.08; }
+    else { player.tilt = 0; }
+
+    if(Math.random() < 0.04) {
+        let tConfig = Math.random() < 0.2 ? {w:22, h:55, type:'moto', color:'#eee', s:1.4} : 
+                      Math.random() < 0.8 ? {w:48, h:90, type:'car', color:`hsl(${Math.random()*360},70%,50%)`, s:0.8} : 
+                      {w:65, h:170, type:'truck', color:'#777', s:0.5};
+        entities.traffic.push({ x: [90, 180, 270, 360][Math.floor(Math.random()*4)], y: -200, ...tConfig });
+    }
+
+    if(Math.random() < 0.02) entities.items.push({ x: 100 + Math.random()*300, y: -50 });
+    if(Math.random() < 0.005) entities.health.push({ x: 100 + Math.random()*300, y: -50 });
+
+    entities.traffic.forEach((t, i) => {
+        t.y += speed - (speed * t.s * 0.5);
+        if(player.x < t.x + t.w && player.x + v.w > t.x && player.y < t.y + t.h && player.y + v.h > t.y) {
+            lives--; entities.traffic.splice(i, 1);
+            document.getElementById('game-container').classList.add('shake');
+            setTimeout(() => document.getElementById('game-container').classList.remove('shake'), 200);
+            if(lives <= 0) { isPlaying = false; document.getElementById('main-menu').style.display = 'flex'; }
+            updateUI();
+        }
+    });
+
+    entities.items.forEach((it, i) => { it.y += speed; if(Math.abs(player.x - it.x) < 40 && Math.abs(player.y - it.y) < 40) { coins += 50; entities.items.splice(i, 1); updateUI(); } });
+    entities.health.forEach((h, i) => { h.y += speed; if(Math.abs(player.x - h.x) < 40 && Math.abs(player.y - h.y) < 40) { if(lives<3) lives++; entities.health.splice(i, 1); updateUI(); } });
+    
+    if(distance % 100 === 0) updateUI();
+}
+
+function draw() {
+    let b = BIOMES[Math.floor((distance / 800) % BIOMES.length)];
+    ctx.fillStyle = b.bg; ctx.fillRect(0,0,500,850);
+    
+    // Bordes de carretera pixelados
+    ctx.fillStyle = "#000"; ctx.fillRect(66, 0, 368, 850);
+    ctx.fillStyle = b.road; ctx.fillRect(70, 0, 360, 850);
+    
+    // Líneas Pixeladas (con sombra)
+    for(let i=0; i<10; i++) {
+        let ly = ((roadY + i * 150) % 900) - 50;
+        [160, 250, 340].forEach(lx => {
+            ctx.fillStyle = "rgba(0,0,0,0.3)"; ctx.fillRect(lx, ly+4, 4, 60); // Sombra
+            ctx.fillStyle = b.line; ctx.fillRect(lx-2, ly, 4, 60);
+        });
+    }
+
+    // Monedas Pixel-Art
+    entities.items.forEach(it => {
+        ctx.fillStyle = "#000"; ctx.fillRect(it.x-12, it.y-12, 24, 24);
+        ctx.fillStyle = "#f1c40f"; ctx.fillRect(it.x-10, it.y-10, 20, 20);
+        ctx.fillStyle = "#f39c12"; ctx.fillRect(it.x+2, it.y-6, 4, 12); // Relieve
+    });
+
+    // Vida Pixel-Art
+    entities.health.forEach(h => {
+        ctx.fillStyle = "#000"; ctx.fillRect(h.x-14, h.y-14, 28, 28);
+        ctx.fillStyle = "#fff"; ctx.fillRect(h.x-12, h.y-12, 24, 24);
+        ctx.fillStyle = "#e74c3c"; ctx.fillRect(h.x-10, h.y-3, 20, 6); ctx.fillRect(h.x-3, h.y-10, 6, 20);
+    });
+
+    entities.traffic.forEach(t => drawVehicle(t.x, t.y, t.color, 0, t.w, t.h));
+    const v = VEHICLES[selectedId];
+    drawVehicle(player.x, player.y, v.color, player.tilt, v.w, v.h);
+}
+
+function drawVehicle(x, y, color, tilt, w, h) {
+    ctx.save();
+    ctx.translate(x + w/2, y + h/2); ctx.rotate(tilt);
+    
+    // Sombra proyectada
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillRect(-w/2+8, -h/2+8, w, h);
+
+    // Borde negro exterior
+    ctx.fillStyle = "black";
+    ctx.fillRect(-w/2, -h/2, w, h);
+
+    // Cuerpo principal
+    ctx.fillStyle = color;
+    ctx.fillRect(-w/2+4, -h/2+4, w-8, h-8);
+    
+    // Brillo superior (Efecto 16-bit)
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.fillRect(-w/2+4, -h/2+4, w-8, 10);
+    ctx.fillRect(-w/2+4, -h/2+4, 6, h-8);
+
+    // Cristales con reflejo "diagonal" retro
+    ctx.fillStyle = "#000";
+    ctx.fillRect(-w/2+10, -h/4, w-20, h/3); 
+    ctx.fillStyle = "#34495e";
+    ctx.fillRect(-w/2+12, -h/4+2, w-24, h/3-4);
+    
+    // Luces rectangulares
+    ctx.fillStyle = "#ffff00"; ctx.fillRect(-w/2+6, -h/2+6, 12, 8); ctx.fillRect(w/2-18, -h/2+6, 12, 8);
+    ctx.fillStyle = "#ff0000"; ctx.fillRect(-w/2+6, h/2-14, 12, 8); ctx.fillRect(w/2-18, h/2-14, 12, 8);
+    
+    ctx.restore();
+}
+
+function loop() { if(!isPlaying) return; update(); draw(); requestAnimationFrame(loop); }
+window.addEventListener('keydown', e => keys[e.key] = true);
+window.addEventListener('keyup', e => keys[e.key] = false);
+initShowroom(); updateUI();
+</script>
+</body>
+</html>
